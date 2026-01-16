@@ -396,7 +396,8 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
                     #[cfg(feature = "tracing")]
                     tracing::info!("{} [{}] {:?}\n", sheet.name, rname, data);
 
-                    let mut col = 1;
+                    // BIFF uses 0-based column indexing
+                    let mut col = 0;
                     for (ixfe, num) in data.values {
                         handle_cell(
                             worksheet,
