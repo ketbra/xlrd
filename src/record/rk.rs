@@ -14,8 +14,39 @@ pub struct Data {
 
     #[br(calc = _rkrec.ixfe())]
     pub ixfe: u16,
-    #[br(calc = { let v = _rkrec.num() as f64; if _rkrec.fx100() { v / 100.0 } else { v } })]
+    #[br(calc = decode_rk_value(&_rkrec))]
     pub num: f64,
+}
+
+/// Decode an RK value according to Excel BIFF8 format.
+/// - If fint is true: the 30-bit value is a signed integer
+/// - If fint is false: the 30-bit value is the high 30 bits of an IEEE 754 double
+/// - If fx100 is true: the result is divided by 100
+pub fn decode_rk_value(rk: &RkRec) -> f64 {
+    let raw = rk.num();
+
+    let value = if rk.fint() {
+        // Integer: treat the 30-bit value as a signed integer
+        let v = raw as i32;
+        // Sign extend from 30 bits
+        let v = if v & 0x20000000 != 0 {
+            v | !0x3FFFFFFF // Sign extend negative values
+        } else {
+            v
+        };
+        v as f64
+    } else {
+        // Float: the 30 bits are the high 30 bits of an IEEE 754 double
+        // Reconstruct by shifting left by 34 bits (the low 34 bits are zero)
+        let bits = (raw as u64) << 34;
+        f64::from_bits(bits)
+    };
+
+    if rk.fx100() {
+        value / 100.0
+    } else {
+        value
+    }
 }
 
 #[bitfield]
@@ -26,8 +57,8 @@ pub struct RkRec {
     pub ixfe: u16,
     #[skip(setters)]
     pub fx100: bool,
-    #[skip]
-    fint: bool,
+    #[skip(setters)]
+    pub fint: bool,
     #[skip(setters)]
     pub num: B30,
 }

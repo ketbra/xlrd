@@ -1,4 +1,4 @@
-use super::rk::RkRec;
+use super::rk::{decode_rk_value, RkRec};
 use binrw::BinRead;
 
 // 2.4.175
@@ -17,8 +17,7 @@ pub struct Data {
     _col_max: u16,
 
     #[br(calc = _rks.iter().map(|rk| {
-        let v = rk.num() as f64;
-        (rk.ixfe(), if rk.fx100() { v / 100.0 } else { v })
+        (rk.ixfe(), decode_rk_value(rk))
     }).collect::<Vec<_>>())]
     pub values: Vec<(u16, f64)>, // (ixfe, num)
 }
