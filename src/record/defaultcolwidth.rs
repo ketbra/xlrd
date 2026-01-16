@@ -5,6 +5,7 @@ pub struct Data {
     #[br(assert(_len == 2))]
     _len: u16,
 
-    #[br(assert(_width <= 0x00FF))]
-    _width: u16,
+    /// Default column width in characters (0-255)
+    #[br(assert(width <= 0x00FF))]
+    pub width: u16,
 }
