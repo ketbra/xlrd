@@ -290,12 +290,29 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
                     tracing::info!("{} [{}] {:?}\n", sheet.name, rname, data);
 
                     // Set default column width for the worksheet
-                    // Python xlrd: defcolwidth is in characters, multiply by 256 to get 256ths
+                    // Python xlrd: defcolwidth is in characters
+                    // Only set if StandardWidth hasn't been set (StandardWidth takes precedence)
                     // umya-spreadsheet expects width in characters
-                    let default_width = data.width as f64;
+                    let current = worksheet.get_sheet_format_properties().get_default_column_width();
+                    if *current == 0.0 {
+                        let default_width = data.width as f64;
+                        worksheet
+                            .get_sheet_format_properties_mut()
+                            .set_default_column_width(default_width);
+                    }
+                }
+                Record::StandardWidth(data) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::info!("{} [{}] {:?}\n", sheet.name, rname, data);
+
+                    // Set standard column width for the worksheet
+                    // Python xlrd: standardwidth is in 1/256ths of a character
+                    // This takes precedence over DefaultColWidth
+                    // umya-spreadsheet expects width in characters
+                    let standard_width = data.width as f64 / 256.0;
                     worksheet
                         .get_sheet_format_properties_mut()
-                        .set_default_column_width(default_width);
+                        .set_default_column_width(standard_width);
                 }
                 Record::DefaultRowHeight(data) => {
                     #[cfg(feature = "tracing")]

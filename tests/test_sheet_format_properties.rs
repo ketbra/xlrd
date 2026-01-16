@@ -168,3 +168,65 @@ fn test_ragged_sheet_format_properties() {
         "Default column width should be non-negative"
     );
 }
+
+/// Test that standard width (in 1/256ths) is handled correctly
+/// Python xlrd: standardwidth takes precedence over defcolwidth
+#[test]
+fn test_standard_width_handling() {
+    // Test with profiles.xls which may have StandardWidth record
+    let workbook = xlrd::open(sample_path("profiles.xls")).expect("Failed to open profiles.xls");
+    let sheet = workbook
+        .get_sheet_by_name("PROFILEDEF")
+        .expect("Sheet not found");
+
+    let props = sheet.get_sheet_format_properties();
+    let col_width = props.get_default_column_width();
+
+    // Width should be reasonable (between 0 and 256 characters)
+    // StandardWidth is in 1/256ths so after conversion should be < 256
+    assert!(
+        *col_width >= 0.0 && *col_width <= 256.0,
+        "Default column width {} should be reasonable",
+        col_width
+    );
+}
+
+/// Test that all sample files have reasonable format properties
+#[test]
+fn test_all_samples_format_properties() {
+    let sample_files = [
+        "profiles.xls",
+        "namesdemo.xls",
+        "ragged.xls",
+        "issue20.xls",
+        "Formate.xls",
+        "xf_class.xls",
+    ];
+
+    for filename in sample_files {
+        let workbook = xlrd::open(sample_path(filename))
+            .unwrap_or_else(|e| panic!("Failed to open {}: {:?}", filename, e));
+
+        for sheet in workbook.get_sheet_collection().iter() {
+            let props = sheet.get_sheet_format_properties();
+            let row_height = props.get_default_row_height();
+            let col_width = props.get_default_column_width();
+
+            // Verify reasonable bounds
+            assert!(
+                *row_height >= 0.0 && *row_height <= 500.0,
+                "File {} sheet '{}': row height {} out of bounds",
+                filename,
+                sheet.get_name(),
+                row_height
+            );
+            assert!(
+                *col_width >= 0.0 && *col_width <= 256.0,
+                "File {} sheet '{}': col width {} out of bounds",
+                filename,
+                sheet.get_name(),
+                col_width
+            );
+        }
+    }
+}

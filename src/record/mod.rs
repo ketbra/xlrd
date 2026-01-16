@@ -25,6 +25,7 @@ mod palette;
 mod rk;
 mod rowinfo;
 mod sst;
+mod standardwidth;
 pub mod style;
 mod styleext;
 pub mod xf;
@@ -97,6 +98,8 @@ pub enum Record {
     Rk(rk::Data),
     #[br(magic(0x0208u16))]
     RowInfo(rowinfo::Data),
+    #[br(magic(0x0099u16))]
+    StandardWidth(standardwidth::Data),
 
     Ignore(Data),
 }
