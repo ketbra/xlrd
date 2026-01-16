@@ -29,7 +29,7 @@ impl Data {
             };
             mean.into()
         } else {
-            // TURE or FALSE
+            // TRUE or FALSE
             format!("{}", self.boolerr == 0x01).to_uppercase()
         }
     }
