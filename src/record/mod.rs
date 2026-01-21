@@ -103,7 +103,14 @@ fn parse_records<R: Read + Seek>(
     let mut records = Vec::new();
     loop {
         match <Record as BinRead>::read_options(reader, endian, ()) {
-            Ok(record) => records.push(record),
+            Ok(record) => {
+                // Check if this is an EOF record - if so, add it and stop reading
+                let is_eof_record = matches!(record, Record::Eof(_));
+                records.push(record);
+                if is_eof_record {
+                    break;
+                }
+            }
             Err(e) => {
                 // Check if this is an EOF error (either direct or wrapped)
                 let error_str = format!("{:?}", e);
