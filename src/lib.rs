@@ -83,6 +83,8 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
     #[cfg(feature = "tracing")]
     let mut book_ignores = HashMap::new();
 
+    let mut seen_first_bof = false;
+
     for record in book_records.0 {
         #[cfg(feature = "tracing")]
         let rname = &record.to_string();
@@ -92,16 +94,21 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
                 #[cfg(feature = "tracing")]
                 tracing::info!("Workbook [{}] {:?}\n", rname, data);
 
-                if !matches!(data.stream_type, StreamType::Workbook) {
-                    let error = Error::StreamType {
-                        expect: StreamType::Workbook,
-                        actual: data.stream_type,
-                    };
+                // Only check the stream type for the first BOF record
+                if !seen_first_bof {
+                    seen_first_bof = true;
 
-                    #[cfg(feature = "tracing")]
-                    tracing::error!("Workbook [{}] {}\n", rname, error);
+                    if !matches!(data.stream_type, StreamType::Workbook) {
+                        let error = Error::StreamType {
+                            expect: StreamType::Workbook,
+                            actual: data.stream_type,
+                        };
 
-                    return Err(error);
+                        #[cfg(feature = "tracing")]
+                        tracing::error!("Workbook [{}] {}\n", rname, error);
+
+                        return Err(error);
+                    }
                 }
             }
             Record::Boundsheet8(mut data) => {
@@ -214,7 +221,7 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
             Record::Ignore(_data) => {
                 #[cfg(feature = "tracing")]
                 {
-                    *book_ignores.entry(_data.r#type).or_insert(0) += 1;
+                    *book_ignores.entry(_data.data.r#type).or_insert(0) += 1;
                 }
             }
             _ => (),
@@ -457,7 +464,7 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
                 Record::Ignore(_data) => {
                     #[cfg(feature = "tracing")]
                     {
-                        *sheet_ignores.entry(_data.r#type).or_insert(0) += 1;
+                        *sheet_ignores.entry(_data.data.r#type).or_insert(0) += 1;
                     }
                 }
                 _ => (),
