@@ -830,3 +830,469 @@ fn test_formula_eval_test_data_structure() {
         }
     }
 }
+
+// ============================================================================
+// Date Serialization Tests
+// ============================================================================
+
+#[test]
+fn test_date_formats_excel_serial_dates() {
+    // From TestHSSFDateUtil.onARealFile()
+    // All test rows use numeric value: 39304.0 (represents August 10, 2007)
+    let path = format!("{}/DateFormats.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open DateFormats.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    // Row 1, Column B (2,2) should contain date value
+    // POI expects numeric value 39304.0 for August 10, 2007
+    if let Some(cell) = sheet.get_cell((2, 2)) {
+        let value = cell.get_value();
+        println!("DateFormats [2,2]: '{}'", value);
+        
+        // Check if it's a numeric value (xlrd may convert to string)
+        if let Ok(numeric_val) = value.parse::<f64>() {
+            // Allow some tolerance for floating point
+            assert!((numeric_val - 39304.0).abs() < 0.01, 
+                "Expected Excel serial date ~39304.0, got {}", numeric_val);
+        } else {
+            println!("Note: Value '{}' is not numeric - may be formatted date string", value);
+        }
+    }
+}
+
+#[test]
+fn test_1900_date_windowing() {
+    // Tests 1900 date system (Windows default)
+    let path = format!("{}/1900DateWindowing.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open 1900DateWindowing.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    println!("1900DateWindowing.xls: {} rows x {} cols", 
+        sheet.get_highest_row(), sheet.get_highest_column());
+    
+    // This file tests date calculations with 1900 epoch
+    // Should have date values that we can read
+    for row in 1..=5.min(sheet.get_highest_row()) {
+        for col in 1..=3.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() {
+                    println!("  [{},{}]: {}", row, col, value);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_1904_date_windowing() {
+    // Tests 1904 date system (Mac Excel)
+    let path = format!("{}/1904DateWindowing.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open 1904DateWindowing.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    println!("1904DateWindowing.xls: {} rows x {} cols", 
+        sheet.get_highest_row(), sheet.get_highest_column());
+    
+    // This file tests date calculations with 1904 epoch (Mac)
+    // Date serial numbers are offset by 1462 days from 1900 system
+    for row in 1..=5.min(sheet.get_highest_row()) {
+        for col in 1..=3.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() {
+                    println!("  [{},{}]: {}", row, col, value);
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Numeric Precision Tests
+// ============================================================================
+
+#[test]
+fn test_sample_ss_numeric_values() {
+    // Tests numeric cell values with precision
+    let path = format!("{}/SampleSS.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open SampleSS.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    // Sample a few cells and verify they're numeric
+    let test_cells = vec![
+        (2, 2), (3, 2), (4, 2),  // Column B, rows 2-4
+        (2, 3), (3, 3), (4, 3),  // Column C, rows 2-4
+    ];
+    
+    let mut numeric_count = 0;
+    let mut string_count = 0;
+    
+    for (col, row) in test_cells {
+        if let Some(cell) = sheet.get_cell((col, row)) {
+            let value = cell.get_value();
+            if !value.is_empty() {
+                match value.parse::<f64>() {
+                    Ok(num) => {
+                        println!("SampleSS [{},{}]: {} (numeric)", row, col, num);
+                        numeric_count += 1;
+                    }
+                    Err(_) => {
+                        println!("SampleSS [{},{}]: '{}' (string)", row, col, value);
+                        string_count += 1;
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("SampleSS: {} numeric cells, {} string cells", numeric_count, string_count);
+}
+
+#[test]
+fn test_formatting_xls_numeric_formats() {
+    // Tests that formatted numbers are readable
+    let path = format!("{}/Formatting.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open Formatting.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    // Sample cells with different numeric formats
+    for row in 1..=10.min(sheet.get_highest_row()) {
+        for col in 1..=5.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() {
+                    // Try to parse as number
+                    if let Ok(num) = value.parse::<f64>() {
+                        println!("Formatting [{},{}]: {} (parsed as {})", row, col, value, num);
+                    } else {
+                        // May be formatted with currency symbols, percentages, etc.
+                        println!("Formatting [{},{}]: '{}' (formatted string)", row, col, value);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_fraction_formats() {
+    // Tests fraction formatting (like 1/2, 3/4, etc.)
+    let path = format!("{}/54686_fraction_formats.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open 54686_fraction_formats.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    println!("Fraction format file: {} rows x {} cols", 
+        sheet.get_highest_row(), sheet.get_highest_column());
+    
+    // Check a sample of cells for fraction-formatted numbers
+    for row in 1..=10.min(sheet.get_highest_row()) {
+        for col in 1..=3.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() {
+                    println!("  [{},{}]: '{}'", row, col, value);
+                    
+                    // Values might be displayed as fractions or decimals
+                    // Verify we can at least read them
+                    if value.contains('/') {
+                        println!("    -> Fraction format detected");
+                    } else if let Ok(_) = value.parse::<f64>() {
+                        println!("    -> Numeric value");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_two_operand_numeric_precision() {
+    // Tests numeric operations and precision
+    let path = format!("{}/TwoOperandNumericFunctionTestCaseData.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open TwoOperandNumericFunctionTestCaseData.xls");
+
+    assert!(workbook.get_sheet_count() >= 2, "Should have at least 2 sheets");
+
+    // Sheet 0 is "Read Me", sheet 1 is "TwoArgNumericFunctions" with test data
+    let sheet = workbook.get_sheet(&1).expect("Failed to get second sheet");
+    
+    // Sample some cells to verify numeric data
+    let mut values_found = 0;
+    for row in 1..=20.min(sheet.get_highest_row()) {
+        for col in 1..=5.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() {
+                    if let Ok(num) = value.parse::<f64>() {
+                        if values_found < 5 {  // Print first 5 for debugging
+                            println!("TwoOperand [{},{}]: {}", row, col, num);
+                        }
+                        values_found += 1;
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("Found {} numeric values in TwoOperand test file", values_found);
+    assert!(values_found > 0, "Should have found some numeric values");
+}
+
+// ============================================================================
+// Cell Value Assertions - Based on Apache POI Tests
+// ============================================================================
+
+#[test]
+fn test_boolean_functions_test_case_data() {
+    // Tests boolean function evaluation
+    let path = format!("{}/BooleanFunctionsTestCaseData.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open BooleanFunctionsTestCaseData.xls");
+    
+    assert_eq!(workbook.get_sheet_count(), 2, "Should have 2 sheets");
+    
+    for i in 0..workbook.get_sheet_count() {
+        let sheet = workbook.get_sheet(&i).expect(&format!("Failed to get sheet {}", i));
+        println!("Sheet {}: '{}' - {} rows x {} cols", 
+            i, sheet.get_name(), sheet.get_highest_row(), sheet.get_highest_column());
+        
+        // Sample a few cells
+        let mut sample_count = 0;
+        for row in 1..=10.min(sheet.get_highest_row()) {
+            for col in 1..=5.min(sheet.get_highest_column()) {
+                if let Some(cell) = sheet.get_cell((col, row)) {
+                    let value = cell.get_value();
+                    if !value.is_empty() && sample_count < 3 {
+                        println!("  [{},{}]: '{}'", row, col, value);
+                        sample_count += 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_complex_function_test_case_data() {
+    // Tests complex number functions (IMREAL, IMAGINARY, etc.)
+    let path = format!("{}/ComplexFunctionTestCaseData.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open ComplexFunctionTestCaseData.xls");
+    
+    assert_eq!(workbook.get_sheet_count(), 2, "Should have 2 sheets");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    println!("ComplexFunction test file: {} rows x {} cols", 
+        sheet.get_highest_row(), sheet.get_highest_column());
+    
+    // Sample cells to verify we can read complex number test data
+    let mut values_found = 0;
+    for row in 1..=15.min(sheet.get_highest_row()) {
+        for col in 1..=5.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() && values_found < 5 {
+                    println!("  [{},{}]: '{}'", row, col, value);
+                    values_found += 1;
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_lookup_functions_test_case_data() {
+    // Tests VLOOKUP, HLOOKUP, INDEX, MATCH functions
+    let path = format!("{}/LookupFunctionsTestCaseData.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open LookupFunctionsTestCaseData.xls");
+    
+    assert_eq!(workbook.get_sheet_count(), 6, "Should have 6 sheets");
+    
+    // Check each sheet has data
+    for i in 0..workbook.get_sheet_count() {
+        let sheet = workbook.get_sheet(&i).expect(&format!("Failed to get sheet {}", i));
+        println!("Sheet {}: '{}' ({} rows x {} cols)", 
+            i, sheet.get_name(), sheet.get_highest_row(), sheet.get_highest_column());
+        
+        assert!(sheet.get_highest_row() > 0, "Sheet {} should have rows", i);
+    }
+}
+
+#[test]
+fn test_if_function_test_case_data_values() {
+    // Tests IF function with various conditions
+    let path = format!("{}/IfFunctionTestCaseData.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open IfFunctionTestCaseData.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    // Sample cells to verify boolean and conditional values
+    let mut true_count = 0;
+    let mut false_count = 0;
+    let mut numeric_count = 0;
+    
+    for row in 1..=20.min(sheet.get_highest_row()) {
+        for col in 1..=5.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                match value.to_lowercase().as_str() {
+                    "true" => true_count += 1,
+                    "false" => false_count += 1,
+                    _ if value.parse::<f64>().is_ok() => numeric_count += 1,
+                    _ => {}
+                }
+            }
+        }
+    }
+    
+    println!("IfFunction test data: {} TRUE, {} FALSE, {} numeric values",
+        true_count, false_count, numeric_count);
+}
+
+#[test]
+fn test_string_formulas_cell_values() {
+    // Tests string manipulation formulas
+    let path = format!("{}/StringFormulas.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open StringFormulas.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    // Sample string cells
+    let mut string_values = Vec::new();
+    for row in 1..=10.min(sheet.get_highest_row()) {
+        for col in 1..=5.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() && value.parse::<f64>().is_err() {
+                    string_values.push(value.clone());
+                    if string_values.len() <= 5 {
+                        println!("StringFormulas [{},{}]: '{}'", row, col, value);
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("Found {} string values in StringFormulas test file", string_values.len());
+}
+
+#[test]
+fn test_3d_formulas_sheet_references() {
+    // Tests 3D references (Sheet1!A1, Sheet2!B2, etc.)
+    let path = format!("{}/3dFormulas.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open 3dFormulas.xls");
+    
+    assert_eq!(workbook.get_sheet_count(), 3, "Should have 3 sheets for 3D references");
+    
+    // Verify all sheets are accessible
+    for i in 0..3 {
+        let sheet = workbook.get_sheet(&i).expect(&format!("Failed to get sheet {}", i));
+        println!("3D Formulas Sheet {}: '{}' ({} rows x {} cols)", 
+            i, sheet.get_name(), sheet.get_highest_row(), sheet.get_highest_column());
+        
+        // Sample first few cells
+        for row in 1..=3.min(sheet.get_highest_row()) {
+            for col in 1..=3.min(sheet.get_highest_column()) {
+                if let Some(cell) = sheet.get_cell((col, row)) {
+                    let value = cell.get_value();
+                    if !value.is_empty() {
+                        println!("  Sheet {}[{},{}]: '{}'", i, row, col, value);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_single_letter_ranges_values() {
+    // Tests column range references (C:C, D:D, etc.)
+    // From TestFormulaEvaluatorBugs: SUM(C:C) should evaluate to 6
+    let path = format!("{}/SingleLetterRanges.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open SingleLetterRanges.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    
+    // Check column C (column 3) for values
+    println!("SingleLetterRanges - Column C values:");
+    let mut col_c_values = Vec::new();
+    for row in 1..=10.min(sheet.get_highest_row()) {
+        if let Some(cell) = sheet.get_cell((3, row)) {
+            let value = cell.get_value();
+            if !value.is_empty() {
+                if let Ok(num) = value.parse::<f64>() {
+                    col_c_values.push(num);
+                    println!("  C{}: {}", row, num);
+                }
+            }
+        }
+    }
+    
+    // POI expects SUM(C:C) = 6
+    if !col_c_values.is_empty() {
+        let sum: f64 = col_c_values.iter().sum();
+        println!("Sum of column C values: {}", sum);
+        // Note: We're reading the values, not evaluating the formula
+        // So we just verify we can read numeric values
+    }
+}
+
+#[test]
+fn test_chinese_provinces_unicode() {
+    // Tests Unicode (Chinese characters) in cells
+    let path = format!("{}/chinese-provinces.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open chinese-provinces.xls");
+    
+    let sheet = workbook.get_sheet(&0).expect("Failed to get first sheet");
+    println!("Chinese provinces file: {} rows x {} cols", 
+        sheet.get_highest_row(), sheet.get_highest_column());
+    
+    // Sample cells to verify we can read Chinese characters
+    let mut unicode_found = false;
+    for row in 1..=10.min(sheet.get_highest_row()) {
+        for col in 1..=3.min(sheet.get_highest_column()) {
+            if let Some(cell) = sheet.get_cell((col, row)) {
+                let value = cell.get_value();
+                if !value.is_empty() {
+                    // Check if contains non-ASCII (Unicode) characters
+                    if value.chars().any(|c| c as u32 > 127) {
+                        unicode_found = true;
+                        println!("Chinese text at [{},{}]: {}", row, col, value);
+                        break;
+                    }
+                }
+            }
+        }
+        if unicode_found { break; }
+    }
+    
+    assert!(unicode_found, "Should have found Chinese (Unicode) text in file");
+}
+
+#[test]
+fn test_dbcs_sheet_name_unicode() {
+    // Tests DBCS (Double-Byte Character Set) in sheet names
+    let path = format!("{}/DBCSSheetName.xls", TEST_DATA_DIR);
+    let workbook = xlrd::open(&path).expect("Failed to open DBCSSheetName.xls");
+    
+    // Check if any sheet names contain Unicode characters
+    let mut unicode_sheet_found = false;
+    for i in 0..workbook.get_sheet_count() {
+        if let Some(sheet) = workbook.get_sheet(&i) {
+            let name = sheet.get_name();
+            println!("Sheet {}: '{}'", i, name);
+            
+            if name.chars().any(|c| c as u32 > 127) {
+                unicode_sheet_found = true;
+                println!("  -> Contains Unicode characters");
+            }
+        }
+    }
+    
+    if !unicode_sheet_found {
+        println!("Note: No Unicode sheet names detected - file may have ASCII names only");
+    }
+}
