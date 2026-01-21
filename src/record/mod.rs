@@ -30,14 +30,114 @@ mod styleext;
 pub mod xf;
 mod xfext;
 
-use binrw::{BinRead, helpers::until_eof};
+use binrw::{BinRead, BinResult};
 use encoding_rs::Encoding;
 use enum_display::EnumDisplay;
 use std::borrow::Cow;
+use std::io::{Read, Seek};
+
+// Wrapper for Data that handles EOF gracefully
+#[derive(Debug)]
+pub struct IgnoreData {
+    pub data: Data,
+}
+
+impl BinRead for IgnoreData {
+    type Args<'a> = ();
+
+    fn read_options<R: Read + Seek>(
+        reader: &mut R,
+        endian: binrw::Endian,
+        _args: Self::Args<'_>,
+    ) -> BinResult<Self> {
+        // Peek at remaining bytes to handle EOF gracefully
+        use std::io::SeekFrom;
+        let pos_before = reader.stream_position()?;
+        reader.seek(SeekFrom::End(0))?;
+        let end_pos = reader.stream_position()?;
+        reader.seek(SeekFrom::Start(pos_before))?;
+
+        let remaining = (end_pos - pos_before) as usize;
+
+        // If there are fewer than 4 bytes remaining (minimum for type + len),
+        // we're at EOF with padding. Return an EOF error to stop parsing.
+        if remaining < 4 {
+            return Err(binrw::Error::Io(std::io::Error::new(
+                std::io::ErrorKind::UnexpectedEof,
+                "Not enough bytes for a complete record",
+            )));
+        }
+
+        // Read type (2 bytes)
+        let mut type_buf = [0u8; 2];
+        reader.read_exact(&mut type_buf)?;
+        let r#type = match endian {
+            binrw::Endian::Little => u16::from_le_bytes(type_buf),
+            binrw::Endian::Big => u16::from_be_bytes(type_buf),
+        };
+
+        // Read length (2 bytes)
+        let mut len_buf = [0u8; 2];
+        reader.read_exact(&mut len_buf)?;
+        let _len = match endian {
+            binrw::Endian::Little => u16::from_le_bytes(len_buf),
+            binrw::Endian::Big => u16::from_be_bytes(len_buf),
+        };
+
+        // Read data bytes
+        let mut bytes = vec![0u8; _len as usize];
+        reader.read_exact(&mut bytes)?;
+
+        Ok(IgnoreData {
+            data: Data { r#type, _len, bytes },
+        })
+    }
+}
+
+// Custom parser for Records that handles EOF padding gracefully
+fn parse_records<R: Read + Seek>(
+    reader: &mut R,
+    endian: binrw::Endian,
+    _: (),
+) -> BinResult<Vec<Record>> {
+    let mut records = Vec::new();
+    loop {
+        match <Record as BinRead>::read_options(reader, endian, ()) {
+            Ok(record) => records.push(record),
+            Err(e) => {
+                // Check if this is an EOF error (either direct or wrapped)
+                let error_str = format!("{:?}", e);
+                let is_eof = match &e {
+                    binrw::Error::Io(io_err) => {
+                        io_err.kind() == std::io::ErrorKind::UnexpectedEof
+                    }
+                    binrw::Error::NoVariantMatch { .. } => {
+                        // When "no variants matched", it's likely because we're at EOF with padding
+                        true
+                    }
+                    _ => {
+                        // Check if the error message contains "no variants matched" or "EOF"
+                        // This handles cases where the error is wrapped in another error type
+                        let contains_no_variant = error_str.contains("no variants matched");
+                        let contains_eof = error_str.to_lowercase().contains("eof");
+                        contains_no_variant || (contains_eof && error_str.contains("0xffd"))
+                    }
+                };
+
+                if is_eof {
+                    break;
+                }
+
+                return Err(e);
+            }
+        }
+    }
+    Ok(records)
+}
 
 #[derive(Debug, BinRead)]
 #[br(little)]
-pub struct Records(#[br(parse_with = until_eof)] pub Vec<Record>);
+pub struct Records(#[br(parse_with = parse_records)] pub Vec<Record>);
 
 #[derive(Debug, BinRead, EnumDisplay)]
 pub enum Record {
@@ -98,7 +198,7 @@ pub enum Record {
     #[br(magic(0x0208u16))]
     RowInfo(rowinfo::Data),
 
-    Ignore(Data),
+    Ignore(IgnoreData),
 }
 
 // #[allow(dead_code)]
