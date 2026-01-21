@@ -14,40 +14,38 @@ pub struct Data {
 
     #[br(calc = _rkrec.ixfe())]
     pub ixfe: u16,
-    #[br(calc = decode_rk_num(&_rkrec))]
+    #[br(calc = decode_rk_value(&_rkrec))]
     pub num: f64,
 }
 
-/// Decode an RK record number value
-///
-/// RK encoding:
-/// - Bit 0: fx100 (if set, divide by 100)
-/// - Bit 1: fInt (if set, value is integer in high 30 bits; if clear, value is IEEE 754 float with low 2 bits of mantissa cleared)
-/// - Bits 2-31: num (30-bit value)
-fn decode_rk_num(rk: &RkRec) -> f64 {
-    let v = if rk.fint() {
-        // Integer value: sign-extend the 30-bit value to i32
-        let num = rk.num() as u32;
-        // Check if bit 29 is set (sign bit for 30-bit signed int)
-        let signed = if (num & 0x20000000) != 0 {
-            // Sign-extend: set bits 30-31
-            (num | 0xC0000000) as i32
+/// Decode an RK value according to Excel BIFF8 format.
+/// - If fint is true: the 30-bit value is a signed integer
+/// - If fint is false: the 30-bit value is the high 30 bits of an IEEE 754 double
+/// - If fx100 is true: the result is divided by 100
+pub fn decode_rk_value(rk: &RkRec) -> f64 {
+    let raw = rk.num();
+
+    let value = if rk.fint() {
+        // Integer: treat the 30-bit value as a signed integer
+        let v = raw as i32;
+        // Sign extend from 30 bits
+        let v = if v & 0x20000000 != 0 {
+            v | !0x3FFFFFFF // Sign extend negative values
         } else {
-            num as i32
+            v
         };
-        signed as f64
+        v as f64
     } else {
-        // IEEE 754 floating-point: the 30-bit value forms the high 30 bits
-        // We need to shift it left by 2 to form bits 2-31 of a 32-bit value,
-        // then reinterpret as the high 32 bits of a 64-bit IEEE 754 double
-        let high_bits = (rk.num() as u64) << 34; // Shift to bits 34-63 of u64
-        f64::from_bits(high_bits)
+        // Float: the 30 bits are the high 30 bits of an IEEE 754 double
+        // Reconstruct by shifting left by 34 bits (the low 34 bits are zero)
+        let bits = (raw as u64) << 34;
+        f64::from_bits(bits)
     };
 
     if rk.fx100() {
-        v / 100.0
+        value / 100.0
     } else {
-        v
+        value
     }
 }
 

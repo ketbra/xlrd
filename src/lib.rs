@@ -292,13 +292,45 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
                         }
                     }
                 }
-                Record::DefaultColWidth(_data) => {
+                Record::DefaultColWidth(data) => {
                     #[cfg(feature = "tracing")]
-                    tracing::info!("{} [{}] {:?}\n", sheet.name, rname, _data);
+                    tracing::info!("{} [{}] {:?}\n", sheet.name, rname, data);
+
+                    // Set default column width for the worksheet
+                    // Python xlrd: defcolwidth is in characters
+                    // Only set if StandardWidth hasn't been set (StandardWidth takes precedence)
+                    // umya-spreadsheet expects width in characters
+                    let current = worksheet.get_sheet_format_properties().get_default_column_width();
+                    if *current == 0.0 {
+                        let default_width = data.width as f64;
+                        worksheet
+                            .get_sheet_format_properties_mut()
+                            .set_default_column_width(default_width);
+                    }
                 }
-                Record::DefaultRowHeight(_data) => {
+                Record::StandardWidth(data) => {
                     #[cfg(feature = "tracing")]
-                    tracing::info!("{} [{}] {:?}\n", sheet.name, rname, _data,);
+                    tracing::info!("{} [{}] {:?}\n", sheet.name, rname, data);
+
+                    // Set standard column width for the worksheet
+                    // Python xlrd: standardwidth is in 1/256ths of a character
+                    // This takes precedence over DefaultColWidth
+                    // umya-spreadsheet expects width in characters
+                    let standard_width = data.width as f64 / 256.0;
+                    worksheet
+                        .get_sheet_format_properties_mut()
+                        .set_default_column_width(standard_width);
+                }
+                Record::DefaultRowHeight(data) => {
+                    #[cfg(feature = "tracing")]
+                    tracing::info!("{} [{}] {:?}\n", sheet.name, rname, data);
+
+                    // Set default row height for the worksheet
+                    // Height is in twips (1/20th of a point), convert to points
+                    let default_height = data.height as f64 / 20.0;
+                    worksheet
+                        .get_sheet_format_properties_mut()
+                        .set_default_row_height(default_height);
                 }
                 Record::Dimensions(_data) => {
                     #[cfg(feature = "tracing")]

@@ -10,7 +10,7 @@ mod codepage;
 mod colinfo;
 mod date1904;
 mod defaultrowheight;
-mod defautlcolwidth;
+mod defaultcolwidth;
 mod dimensions;
 mod filepass;
 pub mod font;
@@ -25,6 +25,7 @@ mod palette;
 mod rk;
 mod rowinfo;
 mod sst;
+mod standardwidth;
 pub mod style;
 mod styleext;
 pub mod xf;
@@ -183,7 +184,7 @@ pub enum Record {
     #[br(magic(0x007Du16))]
     ColInfo(colinfo::Data),
     #[br(magic(0x0055u16))]
-    DefaultColWidth(defautlcolwidth::Data),
+    DefaultColWidth(defaultcolwidth::Data),
     #[br(magic(0x0225u16))]
     DefaultRowHeight(defaultrowheight::Data),
     #[br(magic(0x0200u16))]
@@ -204,6 +205,8 @@ pub enum Record {
     Rk(rk::Data),
     #[br(magic(0x0208u16))]
     RowInfo(rowinfo::Data),
+    #[br(magic(0x0099u16))]
+    StandardWidth(standardwidth::Data),
 
     Ignore(IgnoreData),
 }
