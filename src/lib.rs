@@ -214,7 +214,7 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
             Record::Ignore(_data) => {
                 #[cfg(feature = "tracing")]
                 {
-                    *book_ignores.entry(_data.r#type).or_insert(0) += 1;
+                    *book_ignores.entry(_data.data.r#type).or_insert(0) += 1;
                 }
             }
             _ => (),
@@ -425,7 +425,7 @@ pub fn open(path: impl AsRef<Path>) -> Result<Spreadsheet> {
                 Record::Ignore(_data) => {
                     #[cfg(feature = "tracing")]
                     {
-                        *sheet_ignores.entry(_data.r#type).or_insert(0) += 1;
+                        *sheet_ignores.entry(_data.data.r#type).or_insert(0) += 1;
                     }
                 }
                 _ => (),
