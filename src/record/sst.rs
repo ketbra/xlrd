@@ -70,7 +70,7 @@ struct XLUnicodeRichExtendedString {
     #[br(if(_hext))]
     _cext: i32,
 
-    #[br(count = if hbyte { _cch } else { _cch * 2 })]
+    #[br(count = if hbyte { _cch as usize } else { (_cch as usize) * 2 })]
     bytes: Vec<u8>,
 
     #[br(if(_hrun), count = _crun)]

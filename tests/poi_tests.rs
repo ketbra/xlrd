@@ -495,3 +495,147 @@ fn test_all_files_can_open() {
         }
     }
 }
+#[test]
+fn test_comprehensive_poi_files() {
+    // Comprehensive test of all Apache POI test files organized by category
+    
+    let test_categories = vec![
+        ("Core/Simple Files", vec![
+            "Simple.xls",
+            "SampleSS.xls",
+            "blankworkbook.xls",
+            "empty.xls",
+            "SimpleMultiCell.xls",
+            "SimpleWithAutofilter.xls",
+            "SimpleWithChoose.xls",
+            "SimpleWithColours.xls",
+            "SimpleWithComments.xls",
+            "SimpleWithDataFormat.xls",
+            "SimpleWithFormula.xls",
+            "SimpleWithImages.xls",
+            "SimpleWithPageBreaks.xls",
+            "SimpleWithStyling.xls",
+        ]),
+        ("Formatting", vec![
+            "Formatting.xls",
+            "DateFormats.xls",
+            "FormatChoiceTests.xls",
+            "ConditionalFormattingSamples.xls",
+            "WithConditionalFormatting.xls",
+            "54686_fraction_formats.xls",
+        ]),
+        ("Date/Time", vec![
+            "1900DateWindowing.xls",
+            "1904DateWindowing.xls",
+        ]),
+        ("Formulas", vec![
+            "FormulaEvalTestData.xls",
+            "MatrixFormulaEvalTestData.xls",
+            "BooleanFunctionsTestCaseData.xls",
+            "LogicalFunctionsTestCaseData.xls",
+            "LookupFunctionsTestCaseData.xls",
+            "IndexFunctionTestCaseData.xls",
+            "MatchFunctionTestCaseData.xls",
+            "IfFunctionTestCaseData.xls",
+            "ComplexFunctionTestCaseData.xls",
+            "TwoOperandNumericFunctionTestCaseData.xls",
+            "StringFormulas.xls",
+            "SharedFormulaTest.xls",
+            "3dFormulas.xls",
+            "FormulaRefs.xls",
+            "SingleLetterRanges.xls",
+        ]),
+        ("Charts", vec![
+            "SimpleChart.xls",
+            "WithChart.xls",
+            "WithTwoCharts.xls",
+            "WithThreeCharts.xls",
+        ]),
+        ("Drawing/Images", vec![
+            "DrawingAndComments.xls",
+            "SheetWithDrawing.xls",
+        ]),
+        ("Embedded Objects", vec![
+            "WithEmbeddedObjects.xls",
+            "ole2-embedding.xls",
+        ]),
+        ("Hyperlinks", vec![
+            "WithHyperlink.xls",
+            "WithTwoHyperLinks.xls",
+        ]),
+        ("Multiple Sheets", vec![
+            "TwoSheetsNoneHidden.xls",
+            "TwoSheetsOneHidden.xls",
+            "RepeatingRowsCols.xls",
+        ]),
+        ("Unicode/Internationalization", vec![
+            "DBCSSheetName.xls",
+            "chinese-provinces.xls",
+        ]),
+        ("Bug Regression Tests", vec![
+            "35564.xls",
+            "39634.xls",
+            "41139.xls",
+            "42844.xls",
+            "43493.xls",
+            "45365.xls",
+            "46250.xls",
+            "47920.xls",
+            "48968.xls",
+            "49612.xls",
+            "50298.xls",
+            "51143.xls",
+            "53109.xls",
+            "54206.xls",
+            "55982.xls",
+            "56450.xls",
+            "59264.xls",
+        ]),
+        ("Edge Cases", vec![
+            "NoGutsRecords.xls",
+            "MissingBits.xls",
+        ]),
+    ];
+
+    println!("\n=== Comprehensive POI File Test Suite ===\n");
+    
+    let mut total_passed = 0;
+    let mut total_failed = 0;
+    let mut total_files = 0;
+    
+    for (category, files) in test_categories {
+        println!("Category: {}", category);
+        let mut category_passed = 0;
+        let mut category_failed = 0;
+        
+        for file in files {
+            total_files += 1;
+            let path = format!("{}/{}", TEST_DATA_DIR, file);
+            
+            match xlrd::open(&path) {
+                Ok(workbook) => {
+                    let sheet_count = workbook.get_sheet_count();
+                    println!("  ✓ {}: OK ({} sheet{})", 
+                        file, sheet_count, if sheet_count == 1 { "" } else { "s" });
+                    category_passed += 1;
+                    total_passed += 1;
+                }
+                Err(e) => {
+                    println!("  ✗ {}: FAILED - {:?}", file, e);
+                    category_failed += 1;
+                    total_failed += 1;
+                }
+            }
+        }
+        
+        println!("  Summary: {}/{} passed\n", category_passed, category_passed + category_failed);
+    }
+    
+    println!("=== Overall Summary ===");
+    println!("Total files tested: {}", total_files);
+    println!("Passed: {} ({:.1}%)", total_passed, (total_passed as f64 / total_files as f64) * 100.0);
+    println!("Failed: {} ({:.1}%)", total_failed, (total_failed as f64 / total_files as f64) * 100.0);
+    
+    // Don't fail the test - just report results
+    // This allows us to see which files work and which don't
+}
